@@ -1,149 +1,77 @@
 ================================================================================
-STOCK ANALYSIS MCP SERVER - DOCUMENTATION & SETUP GUIDE
+MULTI-MARKET STOCK ANALYSIS MCP SERVER - DOCUMENTATION & SETUP GUIDE
 ================================================================================
 
 OVERVIEW:
-The Stock Analysis MCP (Model Context Protocol) Server provides a filing-based,
-defensible financial stock analysis engine for U.S. public companies powered by
-SEC EDGAR APIs and XBRL company facts datasets.
+The Multi-Market Stock Analysis MCP Server provides a filing-based, defensible
+financial stock analysis engine supporting:
+- 🇺🇸 US Market (SEC EDGAR)
+- 🇪🇬 EGX Market (Egyptian Exchange / FRA)
+- 🇦🇪 DFM Market (Dubai Financial Market)
+- 🇦🇪 ADX Market (Abu Dhabi Securities Exchange)
 
-SERVER METADATA:
-- Server Name: stock_analysis
-- Container Image: stock-analysis-mcp-server:latest
-- Transport: stdio
-- Primary Data Source: SEC EDGAR (Zero-cost, no API key required)
+ADAPTERS & RESPONSIBILITIES:
+- twelve_data_adapter: Symbol lookup, market quotes, exchange metadata (EGX, DFM, ADX, US).
+- egx_disclosures_adapter: EGX/FRA announcements, financial releases (e.g. COMI, HRHO, ETEL).
+- dfm_disclosures_adapter: DFM listed-company disclosures and statements (e.g. EMAAR, DIB, DEWA).
+- adx_reports_adapter: ADX company financial reports and releases (e.g. EAND, FAB, IHC).
+- regional_analysis_engine: Multi-currency (USD, EGP, AED) ratio calculations and red-flag engine.
 
 ================================================================================
 EXPOSED MCP TOOLS
 ================================================================================
 
 1. resolve_company
-   - Description: Resolves ticker, numeric CIK, or company name to SEC CIK, exchange,
-     title, SIC industry code, and SEC metadata.
-   - Parameters:
-     * query (str, default: ""): Ticker symbol (e.g. "AAPL"), CIK, or company name.
+   - Description: Resolves company symbol, CIK, or name across US (SEC), EGX (Egypt), DFM (Dubai), and ADX (Abu Dhabi).
+   - Parameters: query (str), market (str)
 
-2. get_filings
-   - Description: Returns filing history, accession numbers, filing types, dates, and
-     direct SEC EDGAR document links.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
-     * form_type (str, default: ""): Optional filter (e.g. "10-K", "10-Q", "8-K").
-     * limit (str, default: "10"): Max number of filings to display.
+2. list_disclosures
+   - Description: Lists recent disclosures, filing announcements, and regulatory releases across markets.
+   - Parameters: ticker_or_symbol (str), market (str), limit (str)
 
-3. get_statement_facts
-   - Description: Returns raw and normalized XBRL income statement, balance sheet, or
-     cash flow statement facts.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
-     * statement_type (str, default: "income"): Financial statement ("income", "balance", "cash").
+3. get_financial_report
+   - Description: Returns financial report metadata, period summary, and direct document source links across markets.
+   - Parameters: ticker_or_symbol (str), market (str), period (str)
 
-4. calculate_profitability
-   - Description: Computes deterministic profitability metrics (Net Income, FCF, Margins,
-     EBITDA Proxy, SBC Intensity) with full calculation traces.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
-     * period_type (str, default: "CY"): Period type ("CY" or "FY").
+4. extract_statement
+   - Description: Extracts structured financial statement facts for income statement, balance sheet, or cash flow across markets.
+   - Parameters: ticker_or_symbol (str), statement_type (str), market (str)
 
-5. compare_periods
-   - Description: Produces multi-period aligned financial comparisons with YoY growth rates.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
-     * metric (str, default: "Revenues"): US-GAAP metric concept tag.
-     * num_periods (str, default: "4"): Number of periods to compare.
+5. calculate_profitability
+   - Description: Computes Net Income, Free Cash Flow (FCF), Margins, EBITDA Proxy, and SBC Intensity across markets.
+   - Parameters: ticker_or_symbol (str), market (str), period_type (str)
 
-6. detect_red_flags
-   - Description: Runs automated red-flag diagnostics for cash conversion divergence,
-     margin compression, receivables lag, and dilution.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
+6. compare_periods
+   - Description: Produces multi-period financial comparisons and YoY growth rates across markets.
+   - Parameters: ticker_or_symbol (str), metric (str), market (str), num_periods (str)
 
-7. get_evidence
-   - Description: Returns SEC accession numbers, XBRL tags, filing dates, and direct links
-     supporting audit evidence.
-   - Parameters:
-     * ticker_or_cik (str, default: ""): Ticker symbol or CIK.
-     * fact_tag (str, default: ""): Specific US-GAAP XBRL tag.
+7. detect_red_flags
+   - Description: Applies financial red-flag diagnostic tests for cash conversion divergence, margin compression, and receivables lag.
+   - Parameters: ticker_or_symbol (str), market (str)
+
+8. get_evidence
+   - Description: Returns audit evidence, accession numbers/source IDs, filing URLs, and calculation traces across markets.
+   - Parameters: ticker_or_symbol (str), fact_tag (str), market (str)
 
 ================================================================================
-DOCKER & CLAUDE DESKTOP INSTALLATION INSTRUCTIONS
+DOCKER INSTALLATION & SETUP
 ================================================================================
 
-Step 1: Build the Docker Image
-------------------------------
-Run from the server project directory:
+Build the Docker Image:
   docker build -t stock-analysis-mcp-server:latest .
 
-Step 2: Custom Catalog Entry
-----------------------------
-Add an entry to your Docker MCP catalog (~/.docker/mcp/catalogs/custom.yaml):
-
-version: 2
-name: custom
-displayName: Custom MCP Servers
-registry:
-  stock_analysis:
-    description: "Filing-based financial stock analysis MCP server using SEC EDGAR data."
-    title: "Stock Analysis MCP Server"
-    type: server
-    dateAdded: "2025-01-01T00:00:00Z"
-    image: stock-analysis-mcp-server:latest
-    ref: ""
-    readme: ""
-    toolsUrl: ""
-    source: ""
-    upstream: ""
-    icon: ""
-    tools:
-      - name: resolve_company
-      - name: get_filings
-      - name: get_statement_facts
-      - name: calculate_profitability
-      - name: compare_periods
-      - name: detect_red_flags
-      - name: get_evidence
-    metadata:
-      category: productivity
-      tags:
-        - finance
-        - sec-edgar
-        - stocks
-      license: MIT
-      owner: local
-
-Step 3: Update Registry
------------------------
-Add to ~/.docker/mcp/registry.yaml under the `registry:` key:
-
-registry:
-  stock_analysis:
-    ref: ""
-
-Step 4: Configure Claude Desktop
---------------------------------
-In %APPDATA%\Claude\claude_desktop_config.json (Windows) or
-~/Library/Application Support/Claude/claude_desktop_config.json (macOS), add custom.yaml to args:
-
+Configuration Entry (mcp_config.json):
 {
   "mcpServers": {
-    "mcp-toolkit-gateway": {
+    "stock_analysis": {
       "command": "docker",
       "args": [
         "run",
         "-i",
         "--rm",
-        "-v", "/var/run/docker.sock:/var/run/docker.sock",
-        "-v", "C:\\Users\\YOUR_USER\\.docker\\mcp:/mcp",
-        "docker/mcp-gateway",
-        "--catalog=/mcp/catalogs/docker-mcp.yaml",
-        "--catalog=/mcp/catalogs/custom.yaml",
-        "--config=/mcp/config.yaml",
-        "--registry=/mcp/registry.yaml",
-        "--tools-config=/mcp/tools.yaml",
-        "--transport=stdio"
+        "stock-analysis-mcp-server:latest"
       ]
     }
   }
 }
-
 ================================================================================
