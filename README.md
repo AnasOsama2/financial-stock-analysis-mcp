@@ -1,6 +1,6 @@
 # Multi-Market Stock Analysis MCP Server 📈🌍
 
-A defensible, filing-based **Model Context Protocol (MCP)** server for financial stock analysis supporting **US (SEC EDGAR)**, **Egypt (EGX/FRA)**, **Dubai (DFM)**, and **Abu Dhabi (ADX)** markets.
+A **Model Context Protocol (MCP)** server for financial stock analysis. US data is live from **SEC EDGAR**. Egypt (EGX), Dubai (DFM) and Abu Dhabi (ADX) currently return **demo data** only.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue.svg)
 ![MCP](https://img.shields.io/badge/MCP-FastMCP-green.svg)
@@ -10,16 +10,16 @@ A defensible, filing-based **Model Context Protocol (MCP)** server for financial
 
 ---
 
-## 🏛️ Regional Market Adapters
+## 🏛️ Data Sources and Status
 
-| Adapter Module | Supported Exchanges / Markets | Key Responsibilities |
+| Market | Status | Source |
 |---|---|---|
-| `twelve_data_adapter` | EGX, DFM, ADX, US Equities | Market quotes, symbol resolution, and exchange metadata |
-| `sec_edgar_adapter` | SEC EDGAR (USA) | Official US 10-K/10-Q filing history and XBRL fact extraction |
-| `egx_disclosures_adapter` | EGX / FRA (Egypt) | Egyptian Exchange announcements and financial statements (`COMI`, `HRHO`, `ETEL`) |
-| `dfm_disclosures_adapter` | DFM (Dubai, UAE) | Dubai Financial Market disclosures and quarterly releases (`EMAAR`, `DIB`, `DEWA`) |
-| `adx_reports_adapter` | ADX (Abu Dhabi, UAE) | Abu Dhabi Securities Exchange reports and releases (`EAND`, `FAB`, `IHC`) |
-| `regional_analysis_engine` | Universal Multi-Currency (`EGP`, `AED`, `USD`) | Deterministic metric calculations and red-flag diagnostics |
+| US | Live | SEC EDGAR (company tickers and XBRL company facts) |
+| Egypt (EGX): `COMI`, `HRHO`, `ETEL` | **Demo data** | Hardcoded sample figures in `stock_analysis_server.py`. Not from real filings. |
+| Dubai (DFM): `EMAAR`, `DIB`, `DEWA` | **Demo data** | Same as above |
+| Abu Dhabi (ADX): `EAND`, `FAB`, `IHC` | **Demo data** | Same as above |
+
+Regional outputs start with a DEMO DATA notice and use a placeholder instead of a filing ID. Symbol search can optionally use Twelve Data when `TWELVE_DATA_API_KEY` is set. Connecting real EGX/DFM/ADX disclosure feeds is future work.
 
 ---
 

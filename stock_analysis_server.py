@@ -4,6 +4,8 @@ Multi-Market Stock Analysis MCP Server (US SEC EDGAR, EGX Egypt, DFM Dubai, ADX 
 """
 
 import asyncio
+import functools
+import datetime as _dt
 import os
 import sys
 import logging
@@ -37,6 +39,16 @@ _cache_submissions = {}
 _last_request_time = 0.0
 
 # === REGIONAL MARKET DATABASE (EGX, DFM, ADX) ===
+# DEMO DATA ONLY. These figures are illustrative placeholders, not taken from real filings.
+# Only US results (SEC EDGAR) are live. The accession ID for demo rows is a fixed placeholder
+# so nothing looks like a real filing reference.
+
+DEMO_ID = "N/A (demo data, not a real filing)"
+DEMO_NOTICE = (
+    "> ⚠️ **DEMO DATA.** Regional (EGX, DFM, ADX) figures and source IDs are illustrative "
+    "placeholders, not taken from real filings. Do not use them for analysis. "
+    "US results come live from SEC EDGAR.\n\n"
+)
 
 REGIONAL_DATABASE = {
     # EGX (Egyptian Exchange)
@@ -51,9 +63,9 @@ REGIONAL_DATABASE = {
         "website": "https://www.cibeg.com",
         "disclosures_url": "https://www.egx.com.eg/en/CompanyDisclosures.aspx?Symbol=COMI",
         "financials": {
-            "2024": {"revenue": 62500000000, "net_income": 31200000000, "op_income": 38000000000, "op_cf": 35000000000, "capex": 2100000000, "da": 1800000000, "ar": 8500000000, "sbc": 450000000, "accn": "EGX-COMI-2024-AUDIT"},
-            "2023": {"revenue": 44800000000, "net_income": 22000000000, "op_income": 27500000000, "op_cf": 24000000000, "capex": 1600000000, "da": 1400000000, "ar": 6200000000, "sbc": 320000000, "accn": "EGX-COMI-2023-AUDIT"},
-            "2022": {"revenue": 31500000000, "net_income": 16100000000, "op_income": 19800000000, "op_cf": 18000000000, "capex": 1200000000, "da": 1100000000, "ar": 4800000000, "sbc": 220000000, "accn": "EGX-COMI-2022-AUDIT"},
+            "2024": {"revenue": 62500000000, "net_income": 31200000000, "op_income": 38000000000, "op_cf": 35000000000, "capex": 2100000000, "da": 1800000000, "ar": 8500000000, "sbc": 450000000, "accn": DEMO_ID},
+            "2023": {"revenue": 44800000000, "net_income": 22000000000, "op_income": 27500000000, "op_cf": 24000000000, "capex": 1600000000, "da": 1400000000, "ar": 6200000000, "sbc": 320000000, "accn": DEMO_ID},
+            "2022": {"revenue": 31500000000, "net_income": 16100000000, "op_income": 19800000000, "op_cf": 18000000000, "capex": 1200000000, "da": 1100000000, "ar": 4800000000, "sbc": 220000000, "accn": DEMO_ID},
         }
     },
     "HRHO": {
@@ -67,8 +79,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.efghermes.com",
         "disclosures_url": "https://www.egx.com.eg/en/CompanyDisclosures.aspx?Symbol=HRHO",
         "financials": {
-            "2024": {"revenue": 14200000000, "net_income": 3800000000, "op_income": 5100000000, "op_cf": 4200000000, "capex": 650000000, "da": 520000000, "ar": 2100000000, "sbc": 280000000, "accn": "EGX-HRHO-2024-AUDIT"},
-            "2023": {"revenue": 10500000000, "net_income": 2600000000, "op_income": 3700000000, "op_cf": 3100000000, "capex": 480000000, "da": 410000000, "ar": 1600000000, "sbc": 190000000, "accn": "EGX-HRHO-2023-AUDIT"},
+            "2024": {"revenue": 14200000000, "net_income": 3800000000, "op_income": 5100000000, "op_cf": 4200000000, "capex": 650000000, "da": 520000000, "ar": 2100000000, "sbc": 280000000, "accn": DEMO_ID},
+            "2023": {"revenue": 10500000000, "net_income": 2600000000, "op_income": 3700000000, "op_cf": 3100000000, "capex": 480000000, "da": 410000000, "ar": 1600000000, "sbc": 190000000, "accn": DEMO_ID},
         }
     },
     "ETEL": {
@@ -82,8 +94,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.te.eg",
         "disclosures_url": "https://www.egx.com.eg/en/CompanyDisclosures.aspx?Symbol=ETEL",
         "financials": {
-            "2024": {"revenue": 56800000000, "net_income": 11500000000, "op_income": 15400000000, "op_cf": 14200000000, "capex": 11200000000, "da": 4800000000, "ar": 8900000000, "sbc": 120000000, "accn": "EGX-ETEL-2024-AUDIT"},
-            "2023": {"revenue": 44300000000, "net_income": 9100000000, "op_income": 12100000000, "op_cf": 11500000000, "capex": 8900000000, "da": 3900000000, "ar": 6800000000, "sbc": 95000000, "accn": "EGX-ETEL-2023-AUDIT"},
+            "2024": {"revenue": 56800000000, "net_income": 11500000000, "op_income": 15400000000, "op_cf": 14200000000, "capex": 11200000000, "da": 4800000000, "ar": 8900000000, "sbc": 120000000, "accn": DEMO_ID},
+            "2023": {"revenue": 44300000000, "net_income": 9100000000, "op_income": 12100000000, "op_cf": 11500000000, "capex": 8900000000, "da": 3900000000, "ar": 6800000000, "sbc": 95000000, "accn": DEMO_ID},
         }
     },
     # DFM (Dubai Financial Market)
@@ -98,8 +110,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.emaar.com",
         "disclosures_url": "https://www.dfm.ae/issuer-details?symbol=EMAAR",
         "financials": {
-            "2024": {"revenue": 26700000000, "net_income": 11600000000, "op_income": 13800000000, "op_cf": 14100000000, "capex": 2300000000, "da": 1100000000, "ar": 3200000000, "sbc": 0, "accn": "DFM-EMAAR-2024-AUDIT"},
-            "2023": {"revenue": 24900000000, "net_income": 9800000000, "op_income": 11900000000, "op_cf": 12400000000, "capex": 1900000000, "da": 950000000, "ar": 2800000000, "sbc": 0, "accn": "DFM-EMAAR-2023-AUDIT"},
+            "2024": {"revenue": 26700000000, "net_income": 11600000000, "op_income": 13800000000, "op_cf": 14100000000, "capex": 2300000000, "da": 1100000000, "ar": 3200000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 24900000000, "net_income": 9800000000, "op_income": 11900000000, "op_cf": 12400000000, "capex": 1900000000, "da": 950000000, "ar": 2800000000, "sbc": 0, "accn": DEMO_ID},
         }
     },
     "DIB": {
@@ -113,8 +125,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.dib.ae",
         "disclosures_url": "https://www.dfm.ae/issuer-details?symbol=DIB",
         "financials": {
-            "2024": {"revenue": 20100000000, "net_income": 7010000000, "op_income": 8900000000, "op_cf": 8200000000, "capex": 420000000, "da": 380000000, "ar": 1800000000, "sbc": 0, "accn": "DFM-DIB-2024-AUDIT"},
-            "2023": {"revenue": 16800000000, "net_income": 6050000000, "op_income": 7600000000, "op_cf": 7100000000, "capex": 350000000, "da": 310000000, "ar": 1400000000, "sbc": 0, "accn": "DFM-DIB-2023-AUDIT"},
+            "2024": {"revenue": 20100000000, "net_income": 7010000000, "op_income": 8900000000, "op_cf": 8200000000, "capex": 420000000, "da": 380000000, "ar": 1800000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 16800000000, "net_income": 6050000000, "op_income": 7600000000, "op_cf": 7100000000, "capex": 350000000, "da": 310000000, "ar": 1400000000, "sbc": 0, "accn": DEMO_ID},
         }
     },
     "DEWA": {
@@ -128,8 +140,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.dewa.gov.ae",
         "disclosures_url": "https://www.dfm.ae/issuer-details?symbol=DEWA",
         "financials": {
-            "2024": {"revenue": 29200000000, "net_income": 7900000000, "op_income": 9800000000, "op_cf": 13200000000, "capex": 8400000000, "da": 3900000000, "ar": 4100000000, "sbc": 0, "accn": "DFM-DEWA-2024-AUDIT"},
-            "2023": {"revenue": 27300000000, "net_income": 7450000000, "op_income": 9200000000, "op_cf": 12100000000, "capex": 7800000000, "da": 3600000000, "ar": 3700000000, "sbc": 0, "accn": "DFM-DEWA-2023-AUDIT"},
+            "2024": {"revenue": 29200000000, "net_income": 7900000000, "op_income": 9800000000, "op_cf": 13200000000, "capex": 8400000000, "da": 3900000000, "ar": 4100000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 27300000000, "net_income": 7450000000, "op_income": 9200000000, "op_cf": 12100000000, "capex": 7800000000, "da": 3600000000, "ar": 3700000000, "sbc": 0, "accn": DEMO_ID},
         }
     },
     # ADX (Abu Dhabi Securities Exchange)
@@ -144,8 +156,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.eand.com",
         "disclosures_url": "https://www.adx.ae/English/Pages/ProductsAndServices/MarketData/CompanyDetails.aspx?symbol=EAND",
         "financials": {
-            "2024": {"revenue": 54700000000, "net_income": 10400000000, "op_income": 13900000000, "op_cf": 17800000000, "capex": 8100000000, "da": 5200000000, "ar": 7200000000, "sbc": 0, "accn": "ADX-EAND-2024-AUDIT"},
-            "2023": {"revenue": 52400000000, "net_income": 10100000000, "op_income": 13200000000, "op_cf": 16900000000, "capex": 7500000000, "da": 4900000000, "ar": 6500000000, "sbc": 0, "accn": "ADX-EAND-2023-AUDIT"},
+            "2024": {"revenue": 54700000000, "net_income": 10400000000, "op_income": 13900000000, "op_cf": 17800000000, "capex": 8100000000, "da": 5200000000, "ar": 7200000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 52400000000, "net_income": 10100000000, "op_income": 13200000000, "op_cf": 16900000000, "capex": 7500000000, "da": 4900000000, "ar": 6500000000, "sbc": 0, "accn": DEMO_ID},
         }
     },
     "FAB": {
@@ -159,8 +171,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.bankfab.com",
         "disclosures_url": "https://www.adx.ae/English/Pages/ProductsAndServices/MarketData/CompanyDetails.aspx?symbol=FAB",
         "financials": {
-            "2024": {"revenue": 28500000000, "net_income": 16400000000, "op_income": 19800000000, "op_cf": 18200000000, "capex": 920000000, "da": 810000000, "ar": 3100000000, "sbc": 0, "accn": "ADX-FAB-2024-AUDIT"},
-            "2023": {"revenue": 24200000000, "net_income": 16100000000, "op_income": 18900000000, "op_cf": 17100000000, "capex": 840000000, "da": 750000000, "ar": 2700000000, "sbc": 0, "accn": "ADX-FAB-2023-AUDIT"},
+            "2024": {"revenue": 28500000000, "net_income": 16400000000, "op_income": 19800000000, "op_cf": 18200000000, "capex": 920000000, "da": 810000000, "ar": 3100000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 24200000000, "net_income": 16100000000, "op_income": 18900000000, "op_cf": 17100000000, "capex": 840000000, "da": 750000000, "ar": 2700000000, "sbc": 0, "accn": DEMO_ID},
         }
     },
     "IHC": {
@@ -174,8 +186,8 @@ REGIONAL_DATABASE = {
         "website": "https://www.ihcuae.com",
         "disclosures_url": "https://www.adx.ae/English/Pages/ProductsAndServices/MarketData/CompanyDetails.aspx?symbol=IHC",
         "financials": {
-            "2024": {"revenue": 61200000000, "net_income": 32900000000, "op_income": 38100000000, "op_cf": 28400000000, "capex": 4800000000, "da": 2100000000, "ar": 9400000000, "sbc": 0, "accn": "ADX-IHC-2024-AUDIT"},
-            "2023": {"revenue": 60100000000, "net_income": 32950000000, "op_income": 37800000000, "op_cf": 27100000000, "capex": 4200000000, "da": 1900000000, "ar": 8800000000, "sbc": 0, "accn": "ADX-IHC-2023-AUDIT"},
+            "2024": {"revenue": 61200000000, "net_income": 32900000000, "op_income": 38100000000, "op_cf": 28400000000, "capex": 4800000000, "da": 2100000000, "ar": 9400000000, "sbc": 0, "accn": DEMO_ID},
+            "2023": {"revenue": 60100000000, "net_income": 32950000000, "op_income": 37800000000, "op_cf": 27100000000, "capex": 4200000000, "da": 1900000000, "ar": 8800000000, "sbc": 0, "accn": DEMO_ID},
         }
     }
 }
@@ -219,17 +231,115 @@ async def _ensure_sec_ticker_map():
     except Exception as e:
         logger.error(f"Failed to load SEC ticker mapping: {e}")
 
-async def _resolve_company_meta(query: str, market_hint: str = "") -> dict:
-    """Resolve company ticker/name across US (SEC), EGX, DFM, and ADX markets."""
-    clean_q = query.strip().upper()
-    
-    # 1. Check Regional Database first (EGX, DFM, ADX)
+def _regional_lookup(clean_q: str):
+    """Return the demo regional record for an upper-case query, or None."""
     if clean_q in REGIONAL_DATABASE:
         return REGIONAL_DATABASE[clean_q]
-        
     for sym, item in REGIONAL_DATABASE.items():
         if clean_q in item["name"].upper() or clean_q == sym:
             return item
+    return None
+
+
+def demo_banner(func):
+    """Prefix tool output with a demo-data notice when the query resolved to a regional record."""
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        result = await func(*args, **kwargs)
+        query = next((v for v in list(args) + list(kwargs.values()) if isinstance(v, str)), "")
+        if isinstance(result, str) and not result.startswith("❌") and _regional_lookup(query.strip().upper()):
+            return DEMO_NOTICE + result
+        return result
+
+    return wrapper
+
+
+_US_METRICS = {
+    "revenue": (["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"], True),
+    "net_income": (["NetIncomeLoss", "ProfitLoss"], True),
+    "op_income": (["OperatingIncomeLoss"], True),
+    "op_cf": (["NetCashProvidedByUsedInOperatingActivities"], True),
+    "capex": (["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"], True),
+    "da": (["DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "DepreciationAmortizationAndAccretionNet"], True),
+    "sbc": (["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"], True),
+    "ar": (["AccountsReceivableNetCurrent", "ReceivablesNetCurrent"], False),
+}
+
+
+def _annual_series(facts_data: dict, concepts: list, duration: bool) -> dict:
+    """Map period-end date -> (value, accn) from 10-K filings.
+
+    Duration concepts keep only ~12 month periods, so prior-year comparatives inside a
+    10-K and quarterly values are never mixed up. When a period was reported more than
+    once, the most recently filed value wins. The first concept that has data for a
+    given period end wins over later alternative concepts.
+    """
+    gaap = facts_data.get("facts", {}).get("us-gaap", {})
+    out = {}
+    for concept in concepts:
+        units = gaap.get(concept, {}).get("units", {})
+        usd = units.get("USD") or next(iter(units.values()), [])
+        best = {}
+        for f in usd:
+            if f.get("form") not in ("10-K", "10-K/A") or not f.get("end"):
+                continue
+            if duration:
+                try:
+                    d0 = _dt.date.fromisoformat(f["start"])
+                    d1 = _dt.date.fromisoformat(f["end"])
+                except (KeyError, ValueError):
+                    continue
+                if not 350 <= (d1 - d0).days <= 380:
+                    continue
+            prev = best.get(f["end"])
+            if prev is None or f.get("filed", "") >= prev.get("filed", ""):
+                best[f["end"]] = f
+        for end, f in best.items():
+            out.setdefault(end, (float(f.get("val", 0)), f.get("accn", "N/A")))
+    return out
+
+
+def _us_financials(facts_data: dict, max_years: int = 5) -> dict:
+    """Build {fiscal_year: {revenue, net_income, ..., accn}} newest first, all from the same period end."""
+    series = {k: _annual_series(facts_data, c, dur) for k, (c, dur) in _US_METRICS.items()}
+    ends = sorted(series["revenue"].keys(), reverse=True)[:max_years]
+    fin = {}
+    for end in ends:
+        row = {k: series[k][end][0] if end in series[k] else 0.0 for k in series}
+        row["accn"] = series["revenue"][end][1]
+        row["period_end"] = end
+        fin[end[:4]] = row
+    return fin
+
+
+async def _us_meta(cik: str, ticker: str, name: str) -> dict:
+    meta = {
+        "ticker": ticker,
+        "name": name,
+        "market": "US",
+        "country": "USA",
+        "currency": "USD",
+        "cik": cik,
+        "exchange": "SEC EDGAR",
+        "disclosures_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=10-K",
+        "financials": {},
+    }
+    try:
+        meta["financials"] = _us_financials(await _get_sec_facts(cik))
+    except Exception as e:
+        logger.warning(f"Could not load SEC facts for CIK {cik}: {e}")
+    return meta
+
+
+async def _resolve_company_meta(query: str, market_hint: str = "") -> dict:
+    """Resolve company ticker/name across US (SEC), EGX, DFM, and ADX markets."""
+    clean_q = query.strip().upper()
+
+    # 1. Check Regional Database first (EGX, DFM, ADX)
+    regional = _regional_lookup(clean_q)
+    if regional:
+        return regional
             
     # 2. Check Twelve Data API if key provided
     if TWELVE_DATA_API_KEY and clean_q:
@@ -256,29 +366,11 @@ async def _resolve_company_meta(query: str, market_hint: str = "") -> dict:
     if clean_q in _sec_ticker_to_cik:
         cik = _sec_ticker_to_cik[clean_q]
         meta = _sec_cik_to_meta.get(cik, {"cik": cik, "ticker": clean_q, "title": clean_q})
-        return {
-            "ticker": meta.get("ticker", clean_q),
-            "name": meta.get("title", clean_q),
-            "market": "US",
-            "country": "USA",
-            "currency": "USD",
-            "cik": cik,
-            "exchange": "SEC EDGAR",
-            "financials": {}
-        }
+        return await _us_meta(cik, meta.get("ticker", clean_q), meta.get("title", clean_q))
         
     for cik, meta in _sec_cik_to_meta.items():
         if clean_q in meta["title"].upper():
-            return {
-                "ticker": meta.get("ticker", clean_q),
-                "name": meta.get("title", clean_q),
-                "market": "US",
-                "country": "USA",
-                "currency": "USD",
-                "cik": cik,
-                "exchange": "SEC EDGAR",
-                "financials": {}
-            }
+            return await _us_meta(cik, meta.get("ticker", clean_q), meta.get("title", clean_q))
             
     raise ValueError(f"Could not resolve company for query '{query}' across US, EGX, DFM, or ADX markets.")
 
@@ -354,6 +446,7 @@ def _format_pct(val) -> str:
 # === UNIFIED MCP TOOLS ===
 
 @mcp.tool()
+@demo_banner
 async def resolve_company(query: str = "", market: str = "") -> str:
     """Resolve company symbol, CIK, or name across US (SEC), EGX (Egypt), DFM (Dubai), and ADX (Abu Dhabi)."""
     logger.info(f"Executing resolve_company for query='{query}', market='{market}'")
@@ -384,6 +477,7 @@ async def resolve_company(query: str = "", market: str = "") -> str:
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def list_disclosures(ticker_or_symbol: str = "", market: str = "", limit: str = "10") -> str:
     """List recent disclosures, filing announcements, and regulatory releases for a company across markets."""
     logger.info(f"Executing list_disclosures for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -439,6 +533,7 @@ async def list_disclosures(ticker_or_symbol: str = "", market: str = "", limit: 
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def get_financial_report(ticker_or_symbol: str = "", market: str = "", period: str = "annual") -> str:
     """Return financial report metadata, period summary, and direct document source links across markets."""
     logger.info(f"Executing get_financial_report for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -451,10 +546,12 @@ async def get_financial_report(ticker_or_symbol: str = "", market: str = "", per
         c_code = meta.get("currency", "USD")
         
         fin = meta.get("financials", {})
-        latest_fy = list(fin.keys())[0] if fin else "2024"
-        fy_data = fin.get(latest_fy, {})
-        
-        accn = fy_data.get("accn", f"{meta.get('market', 'MARKET')}-{sym}-{latest_fy}-RPT")
+        if not fin:
+            return f"⚠️ No annual financial data found for {meta.get('name')}"
+        latest_fy = list(fin.keys())[0]
+        fy_data = fin[latest_fy]
+
+        accn = fy_data.get("accn", DEMO_ID if meta.get("market") != "US" else "N/A")
         rev = _format_curr(fy_data.get("revenue", 0), c_code)
         net_inc = _format_curr(fy_data.get("net_income", 0), c_code)
         doc_link = meta.get("disclosures_url", meta.get("website", "https://www.sec.gov"))
@@ -478,6 +575,7 @@ async def get_financial_report(ticker_or_symbol: str = "", market: str = "", per
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def extract_statement(ticker_or_symbol: str = "", statement_type: str = "income", market: str = "") -> str:
     """Extract structured financial statement facts for income statement, balance sheet, or cash flow across markets."""
     logger.info(f"Executing extract_statement for ticker_or_symbol='{ticker_or_symbol}', statement_type='{statement_type}'")
@@ -489,46 +587,32 @@ async def extract_statement(ticker_or_symbol: str = "", statement_type: str = "i
         c_code = meta.get("currency", "USD")
         st = statement_type.strip().lower()
         
-        if meta.get("market") == "US":
-            cik = meta.get("cik", "")
-            facts = await _get_sec_facts(cik)
-            concepts = ["Revenues", "SalesRevenueNet", "OperatingIncomeLoss", "NetIncomeLoss"] if "inc" in st else ["Assets", "Liabilities", "StockholdersEquity"]
-            output_rows = []
-            for concept in concepts:
-                c_name, unit_key, fact_list = _find_concept_units(facts, [concept])
-                if fact_list:
-                    fy_facts = _filter_facts(fact_list, form_types=["10-K"], fp_filter="FY")
-                    fy_facts.sort(key=lambda x: x.get("fy", 0), reverse=True)
-                    for f in fy_facts[:2]:
-                        output_rows.append(f"| `{concept}` | FY{f.get('fy')} | {_format_curr(f.get('val'), c_code)} | `{f.get('accn')}` |")
-            header = [f"📊 **XBRL Statement Facts for {meta.get('name')} (US Market)**", "", "| Fact Tag | Period | Value | Accession ID |", "|---|---|---|---|"]
-            return "\n".join(header + output_rows)
-        else:
-            fin = meta.get("financials", {})
-            rows = []
-            for fy, data in fin.items():
-                if "inc" in st or "pnl" in st:
-                    rows.append(f"| Revenue | FY{fy} | {_format_curr(data.get('revenue'), c_code)} | `{data.get('accn')}` |")
-                    rows.append(f"| Operating Income | FY{fy} | {_format_curr(data.get('op_income'), c_code)} | `{data.get('accn')}` |")
-                    rows.append(f"| Net Income | FY{fy} | {_format_curr(data.get('net_income'), c_code)} | `{data.get('accn')}` |")
-                elif "cash" in st or "cf" in st:
-                    rows.append(f"| Operating Cash Flow | FY{fy} | {_format_curr(data.get('op_cf'), c_code)} | `{data.get('accn')}` |")
-                    rows.append(f"| Capital Expenditures | FY{fy} | {_format_curr(data.get('capex'), c_code)} | `{data.get('accn')}` |")
-                else:
-                    rows.append(f"| Receivables / Assets | FY{fy} | {_format_curr(data.get('ar'), c_code)} | `{data.get('accn')}` |")
-                    
-            header = [
-                f"📊 **Financial Statement Fact Extraction for {meta.get('name')} ({meta.get('market')} Market)**",
-                "",
-                "| Financial Concept | Period | Value | Accession ID / Audit Tag |",
-                "|---|---|---|---|"
-            ]
-            return "\n".join(header + rows)
+        fin = meta.get("financials", {})
+        rows = []
+        for fy, data in fin.items():
+            if "inc" in st or "pnl" in st:
+                rows.append(f"| Revenue | FY{fy} | {_format_curr(data.get('revenue'), c_code)} | `{data.get('accn')}` |")
+                rows.append(f"| Operating Income | FY{fy} | {_format_curr(data.get('op_income'), c_code)} | `{data.get('accn')}` |")
+                rows.append(f"| Net Income | FY{fy} | {_format_curr(data.get('net_income'), c_code)} | `{data.get('accn')}` |")
+            elif "cash" in st or "cf" in st:
+                rows.append(f"| Operating Cash Flow | FY{fy} | {_format_curr(data.get('op_cf'), c_code)} | `{data.get('accn')}` |")
+                rows.append(f"| Capital Expenditures | FY{fy} | {_format_curr(data.get('capex'), c_code)} | `{data.get('accn')}` |")
+            else:
+                rows.append(f"| Receivables / Assets | FY{fy} | {_format_curr(data.get('ar'), c_code)} | `{data.get('accn')}` |")
+
+        header = [
+            f"📊 **Financial Statement Fact Extraction for {meta.get('name')} ({meta.get('market')} Market)**",
+            "",
+            "| Financial Concept | Period | Value | Accession ID / Audit Tag |",
+            "|---|---|---|---|"
+        ]
+        return "\n".join(header + rows)
     except Exception as e:
         logger.error(f"Error in extract_statement: {e}")
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def calculate_profitability(ticker_or_symbol: str = "", market: str = "", period_type: str = "annual") -> str:
     """Calculate profitability metrics including Net Income, Free Cash Flow, margins, EBITDA proxy, and SBC intensity."""
     logger.info(f"Executing calculate_profitability for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -539,49 +623,19 @@ async def calculate_profitability(ticker_or_symbol: str = "", market: str = "", 
         meta = await _resolve_company_meta(ticker_or_symbol, market)
         c_code = meta.get("currency", "USD")
         
-        if meta.get("market") == "US":
-            cik = meta.get("cik", "")
-            facts = await _get_sec_facts(cik)
-            _, _, rev_list = _find_concept_units(facts, ["Revenues", "SalesRevenueNet"])
-            _, _, net_list = _find_concept_units(facts, ["NetIncomeLoss"])
-            _, _, op_list = _find_concept_units(facts, ["OperatingIncomeLoss"])
-            _, _, cf_list = _find_concept_units(facts, ["NetCashProvidedByUsedInOperatingActivities"])
-            _, _, capex_list = _find_concept_units(facts, ["PaymentsToAcquirePropertyPlantAndEquipment"])
-            _, _, da_list = _find_concept_units(facts, ["DepreciationDepletionAndAmortization"])
-            _, _, sbc_list = _find_concept_units(facts, ["ShareBasedCompensation"])
-            
-            rev_fy = _filter_facts(rev_list, form_types=["10-K"], fp_filter="FY")
-            rev_fy.sort(key=lambda x: x.get("fy", 0), reverse=True)
-            if not rev_fy:
-                return f"⚠️ Insufficient data for {meta.get('name')}"
-            latest_fy = rev_fy[0].get("fy")
-            
-            def get_val(f_list):
-                for f in _filter_facts(f_list, form_types=["10-K"], fp_filter="FY"):
-                    if f.get("fy") == latest_fy:
-                        return float(f.get("val", 0)), f.get("accn", "N/A")
-                return 0.0, "N/A"
-                
-            revenue, r_acc = float(rev_fy[0].get("val", 0)), rev_fy[0].get("accn", "N/A")
-            net_inc, _ = get_val(net_list)
-            op_inc, _ = get_val(op_list)
-            op_cf, _ = get_val(cf_list)
-            capex, _ = get_val(capex_list)
-            da, _ = get_val(da_list)
-            sbc, _ = get_val(sbc_list)
-            accn = r_acc
-        else:
-            fin = meta.get("financials", {})
-            latest_fy = list(fin.keys())[0] if fin else "2024"
-            d = fin.get(latest_fy, {})
-            revenue = float(d.get("revenue", 0))
-            net_inc = float(d.get("net_income", 0))
-            op_inc = float(d.get("op_income", 0))
-            op_cf = float(d.get("op_cf", 0))
-            capex = float(d.get("capex", 0))
-            da = float(d.get("da", 0))
-            sbc = float(d.get("sbc", 0))
-            accn = d.get("accn", "AUDIT-CONFIRMED")
+        fin = meta.get("financials", {})
+        if not fin:
+            return f"⚠️ No annual financial data found for {meta.get('name')}"
+        latest_fy = list(fin.keys())[0]
+        d = fin[latest_fy]
+        revenue = float(d.get("revenue", 0))
+        net_inc = float(d.get("net_income", 0))
+        op_inc = float(d.get("op_income", 0))
+        op_cf = float(d.get("op_cf", 0))
+        capex = float(d.get("capex", 0))
+        da = float(d.get("da", 0))
+        sbc = float(d.get("sbc", 0))
+        accn = d.get("accn", DEMO_ID)
             
         fcf = op_cf - capex
         op_margin = (op_inc / revenue) if revenue else 0.0
@@ -612,6 +666,7 @@ async def calculate_profitability(ticker_or_symbol: str = "", market: str = "", 
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def compare_periods(ticker_or_symbol: str = "", metric: str = "revenue", market: str = "", num_periods: str = "4") -> str:
     """Produce multi-period financial comparisons and YoY growth rates across markets."""
     logger.info(f"Executing compare_periods for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -630,7 +685,7 @@ async def compare_periods(ticker_or_symbol: str = "", metric: str = "revenue", m
         for i, fy in enumerate(years):
             val = float(fin[fy].get("revenue", 0))
             val_str = _format_curr(val, c_code)
-            accn = fin[fy].get("accn", "AUDIT")
+            accn = fin[fy].get("accn", DEMO_ID)
             
             yoy_str = "N/A"
             if i + 1 < len(years):
@@ -642,7 +697,7 @@ async def compare_periods(ticker_or_symbol: str = "", metric: str = "revenue", m
             rows.append(f"| FY{fy} | {val_str} | {yoy_str} | `{accn}` |")
             
         if not rows:
-            rows.append(f"| FY2024 | {_format_curr(1000000000, c_code)} | N/A | `SAMPLE-METRIC` |")
+            return f"⚠️ No annual financial data found for {meta.get('name')}"
             
         header = [
             f"📊 **Multi-Period Growth Comparison for {meta.get('name')} ({meta.get('market')})**",
@@ -657,6 +712,7 @@ async def compare_periods(ticker_or_symbol: str = "", metric: str = "revenue", m
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def detect_red_flags(ticker_or_symbol: str = "", market: str = "") -> str:
     """Apply financial red-flag diagnostic tests for cash conversion divergence, margin compression, and working capital lag."""
     logger.info(f"Executing detect_red_flags for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -710,6 +766,7 @@ async def detect_red_flags(ticker_or_symbol: str = "", market: str = "") -> str:
         return f"❌ Error: {str(e)}"
 
 @mcp.tool()
+@demo_banner
 async def get_evidence(ticker_or_symbol: str = "", fact_tag: str = "", market: str = "") -> str:
     """Return audit evidence, accession numbers/source IDs, filing URLs, and calculation traces across markets."""
     logger.info(f"Executing get_evidence for ticker_or_symbol='{ticker_or_symbol}', market='{market}'")
@@ -721,10 +778,12 @@ async def get_evidence(ticker_or_symbol: str = "", fact_tag: str = "", market: s
         c_code = meta.get("currency", "USD")
         fin = meta.get("financials", {})
         
-        latest_fy = list(fin.keys())[0] if fin else "2024"
-        d = fin.get(latest_fy, {})
-        accn = d.get("accn", f"{meta.get('market')}-{meta.get('ticker')}-{latest_fy}-AUDIT")
-        val = d.get("revenue", 1000000000)
+        if not fin:
+            return f"⚠️ No annual financial data found for {meta.get('name')}"
+        latest_fy = list(fin.keys())[0]
+        d = fin[latest_fy]
+        accn = d.get("accn", DEMO_ID)
+        val = d.get("revenue", 0)
         source_url = meta.get("disclosures_url", meta.get("website", "https://www.sec.gov"))
         
         output = [
